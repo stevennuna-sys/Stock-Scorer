@@ -1,73 +1,63 @@
-// app/api/yahoo/route.js
+export const runtime = "nodejs";
+
+function json(data, status = 200) {
+  return new Response(JSON.stringify(data), {
+    status,
+    headers: { "content-type": "application/json" }
+  });
+}
 
 export async function GET(req) {
   try {
     const { searchParams } = new URL(req.url);
-    const ticker = (searchParams.get("ticker") || "").trim().toUpperCase();
+    const symbol = (searchParams.get("symbol") || "").trim().toUpperCase();
 
-    if (!ticker) {
-      return new Response(JSON.stringify({ error: "Missing ticker" }), {
-        status: 400,
-        headers: { "content-type": "application/json" },
-      });
-    }
+    if (!symbol) return json({ error: "Missing symbol" }, 400);
 
-    const quoteUrl = `https://query1.finance.yahoo.com/v7/finance/quote?symbols=${encodeURIComponent(
-      ticker
-    )}`;
+    const apiKey = process.env.FMP_KEY;
+    if (!apiKey) return json({ error: "Missing FMP_KEY in environment variables" }, 500);
 
-    const headers = {
-      "User-Agent":
-        "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
-      Accept: "application/json,text/plain,*/*",
-      "Accept-Language": "en-US,en;q=0.9",
-      Referer: "https://finance.yahoo.com/",
-    };
+    const url = `https://financialmodelingprep.com/api/v3/quote/${encodeURIComponent(symbol)}?apikey=${apiKey}`;
 
-    const res = await fetch(quoteUrl, {
-      headers,
-      cache: "no-store",
-      signal: AbortSignal.timeout(8000),
-    });
+    const res = await fetch(url, { cache: "no-store" });
+    const text = await res.text();
 
     if (!res.ok) {
-      const text = await res.text().catch(() => "");
-      return new Response(
-        JSON.stringify({
-          error: `Yahoo returned ${res.status}`,
-          details: text?.slice(0, 500) || "",
-        }),
-        {
-          status: res.status,
-          headers: { "content-type": "application/json" },
-        }
+      return json(
+        { error: "FMP request failed", status: res.status, body: text.slice(0, 500) },
+        502
       );
     }
 
-    const data = await res.json();
-
-    const result = data?.quoteResponse?.result?.[0];
-    if (!result) {
-      return new Response(JSON.stringify({ error: "No data for ticker" }), {
-        status: 404,
-        headers: { "content-type": "application/json" },
-      });
+    let arr;
+    try {
+      arr = JSON.parse(text);
+    } catch {
+      return json({ error: "Bad JSON from FMP", body: text.slice(0, 500) }, 502);
     }
 
-    return new Response(JSON.stringify({ ticker, result }), {
-      status: 200,
-      headers: { "content-type": "application/json" },
+    const q = Array.isArray(arr) ? arr[0] : null;
+    if (!q) return json({ error: "No data for symbol", symbol }, 404);
+
+    return json({
+      symbol: q.symbol,
+      price: q.price,
+      change: q.change,
+      changesPercentage: q.changesPercentage,
+      previousClose: q.previousClose,
+      open: q.open,
+      dayLow: q.dayLow,
+      dayHigh: q.dayHigh,
+      yearLow: q.yearLow,
+      yearHigh: q.yearHigh,
+      marketCap: q.marketCap,
+      pe: q.pe,
+      eps: q.eps,
+      volume: q.volume,
+      avgVolume: q.avgVolume,
+      earningsAnnouncement: q.earningsAnnouncement
     });
-  } catch (err) {
-    return new Response(
-      JSON.stringify({
-        error: "Server error",
-        message: err?.message || String(err),
-      }),
-      {
-        status: 500,
-        headers: { "content-type": "application/json" },
-      }
-    );
+  } catch (e) {
+    return json({ error: "Server error", message: String(e?.message || e) }, 500);
   }
 }
