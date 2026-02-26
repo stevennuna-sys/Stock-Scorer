@@ -1,63 +1,98 @@
-export const runtime = "nodejs";
+import { NextResponse } from "next/server";
 
-function json(data, status = 200) {
-  return new Response(JSON.stringify(data), {
-    status,
-    headers: { "content-type": "application/json" }
-  });
+const BASE = "https://financialmodelingprep.com/stable";
+
+function sleep(ms) {
+  return new Promise((r) => setTimeout(r, ms));
 }
 
-export async function GET(req) {
-  try {
-    const { searchParams } = new URL(req.url);
-    const symbol = (searchParams.get("symbol") || "").trim().toUpperCase();
+async function fetchJson(url) {
+  // Light retry for rate limits
+  for (let attempt = 0; attempt < 3; attempt++) {
+    const res = await fetch(url, {
+      cache: "no-store",
+      headers: {
+        Accept: "application/json",
+      },
+    });
 
-    if (!symbol) return json({ error: "Missing symbol" }, 400);
+    if (res.status === 429 && attempt < 2) {
+      await sleep(350 * (attempt + 1));
+      continue;
+    }
 
-    const apiKey = process.env.FMP_KEY;
-    if (!apiKey) return json({ error: "Missing FMP_KEY in environment variables" }, 500);
-
-    const url = `https://financialmodelingprep.com/api/v3/quote/${encodeURIComponent(symbol)}?apikey=${apiKey}`;
-
-    const res = await fetch(url, { cache: "no-store" });
     const text = await res.text();
+    let data = null;
+    try {
+      data = text ? JSON.parse(text) : null;
+    } catch {
+      data = { raw: text };
+    }
 
-    if (!res.ok) {
-      return json(
-        { error: "FMP request failed", status: res.status, body: text.slice(0, 500) },
-        502
+    return { ok: res.ok, status: res.status, data };
+  }
+
+  return { ok: false, status: 429, data: { error: "Rate limited" } };
+}
+
+export async function GET(request) {
+  try {
+    const { searchParams } = new URL(request.url);
+    const ticker = (searchParams.get("ticker") || "").trim().toUpperCase();
+
+    if (!ticker) {
+      return NextResponse.json({ error: "Missing symbol" }, { status: 400 });
+    }
+
+    const apiKey = process.env.FMP_API_KEY;
+    if (!apiKey) {
+      return NextResponse.json(
+        { error: "Missing FMP_API_KEY env var on server" },
+        { status: 500 }
       );
     }
 
-    let arr;
-    try {
-      arr = JSON.parse(text);
-    } catch {
-      return json({ error: "Bad JSON from FMP", body: text.slice(0, 500) }, 502);
+    const quoteUrl = `${BASE}/quote?symbol=${encodeURIComponent(ticker)}&apikey=${encodeURIComponent(apiKey)}`;
+    const profileUrl = `${BASE}/profile?symbol=${encodeURIComponent(ticker)}&apikey=${encodeURIComponent(apiKey)}`;
+
+    const [quoteRes, profileRes] = await Promise.all([
+      fetchJson(quoteUrl),
+      fetchJson(profileUrl),
+    ]);
+
+    if (!quoteRes.ok) {
+      return NextResponse.json(
+        { error: "FMP quote failed", status: quoteRes.status, details: quoteRes.data },
+        { status: 502 }
+      );
     }
 
-    const q = Array.isArray(arr) ? arr[0] : null;
-    if (!q) return json({ error: "No data for symbol", symbol }, 404);
+    // FMP returns arrays for many endpoints
+    const quote = Array.isArray(quoteRes.data) ? quoteRes.data[0] : quoteRes.data;
+    const profile = profileRes.ok
+      ? (Array.isArray(profileRes.data) ? profileRes.data[0] : profileRes.data)
+      : null;
 
-    return json({
-      symbol: q.symbol,
-      price: q.price,
-      change: q.change,
-      changesPercentage: q.changesPercentage,
-      previousClose: q.previousClose,
-      open: q.open,
-      dayLow: q.dayLow,
-      dayHigh: q.dayHigh,
-      yearLow: q.yearLow,
-      yearHigh: q.yearHigh,
-      marketCap: q.marketCap,
-      pe: q.pe,
-      eps: q.eps,
-      volume: q.volume,
-      avgVolume: q.avgVolume,
-      earningsAnnouncement: q.earningsAnnouncement
-    });
+    if (!quote) {
+      return NextResponse.json(
+        { error: "No quote data returned from FMP" },
+        { status: 502 }
+      );
+    }
+
+    return NextResponse.json(
+      {
+        source: "fmp",
+        ticker,
+        quote,
+        profile,
+      },
+      { status: 200 }
+    );
   } catch (e) {
-    return json({ error: "Server error", message: String(e?.message || e) }, 500);
+    return NextResponse.json(
+      { error: "Server error", details: String(e?.message || e) },
+      { status: 500 }
+    );
   }
 }
