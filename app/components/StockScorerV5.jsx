@@ -440,7 +440,7 @@ export default function StockScorerV5() {
     setFetchErr("");
 
     try {
-      const res = await fetch(`/api/yahoo?ticker=${encodeURIComponent(ticker)}`);
+      const res = await fetch(`/api/fmp?ticker=${encodeURIComponent(ticker)}`, { cache: "no-store" });
       if (!res.ok) {
         const err = await res.json().catch(() => ({}));
         throw new Error(err.error || `HTTP ${res.status}`);
