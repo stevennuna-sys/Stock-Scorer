@@ -545,19 +545,38 @@ export default function StockScorerV5() {
 
   return (
     <div style={{ minHeight: "100vh", background: "#080910", color: "#e2e8f0", fontFamily: "'DM Sans', sans-serif" }}>
-      <style>{`@import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;700;800&family=DM+Mono:wght@400;500;700&display=swap'); *{box-sizing:border-box;margin:0;padding:0} ::-webkit-scrollbar{width:3px} ::-webkit-scrollbar-thumb{background:#1e293b;border-radius:2px} select option{background:#0a0c18;color:#e2e8f0}`}</style>
+      <style>{`
+        @import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;700;800&family=DM+Mono:wght@400;500;700&display=swap');
+        *{box-sizing:border-box;margin:0;padding:0}
+        ::-webkit-scrollbar{width:3px}
+        ::-webkit-scrollbar-thumb{background:#1e293b;border-radius:2px}
+        select option{background:#0a0c18;color:#e2e8f0}
 
-      <div style={{ maxWidth: 1160, margin: "0 auto", padding: "18px 14px" }}>
+        .ss_container{max-width:1160px;margin:0 auto;padding:18px 14px}
+        .ss_layout{display:grid;grid-template-columns:200px 1fr;gap:14px;align-items:start}
+        .ss_sidebar{display:flex;flex-direction:column;gap:10px;position:sticky;top:16px}
+        .ss_factors{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+        .ss_output{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+
+        @media (max-width: 980px){
+          .ss_layout{grid-template-columns:1fr}
+          .ss_sidebar{position:static}
+          .ss_factors{grid-template-columns:1fr}
+          .ss_output{grid-template-columns:1fr}
+        }
+      `}</style>
+
+      <div className="ss_container">
 
         {/* HEADER */}
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: 10, paddingBottom: 16, marginBottom: 18, borderBottom: "1px solid rgba(255,255,255,0.05)" }}>
           <div>
             <div style={{ display: "flex", gap: 5, alignItems: "center", marginBottom: 5 }}>
               {["core", "timing", "risk"].map((k) => <div key={k} style={{ width: 6, height: 6, borderRadius: "50%", background: C[k], boxShadow: "0 0 8px " + C[k] }} />)}
-              <span style={{ fontSize: 9, color: "#1e293b", letterSpacing: 3, fontFamily: "'DM Mono', monospace", marginLeft: 4 }}>V5  PRODUCTION</span>
+              <span style={{ fontSize: 9, color: "#94a3b8", letterSpacing: 3, fontFamily: "'DM Mono', monospace", marginLeft: 4 }}>V5  PRODUCTION</span>
             </div>
             <h1 style={{ fontSize: 22, fontWeight: 800, letterSpacing: -0.5, background: `linear-gradient(90deg, #e2e8f0, ${C.core} 50%, ${C.timing})`, WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent" }}>Stock Opportunity Scorer</h1>
-            <p style={{ fontSize: 10, color: "#1e293b", marginTop: 2 }}>Core x (0.75 + timingRaw/80) - Risk | Auto-fill from Yahoo Finance | localStorage persistence</p>
+            <p style={{ fontSize: 10, color: "#94a3b8", marginTop: 2 }}>Core x (0.75 + timingRaw/80) - Risk | Auto-fill from Yahoo Finance | localStorage persistence</p>
           </div>
           <div style={{ display: "flex", gap: 5, flexWrap: "wrap" }}>
             {Object.keys(PRESETS).map((k) => (
@@ -569,20 +588,20 @@ export default function StockScorerV5() {
           </div>
         </div>
 
-        <div style={{ display: "grid", gridTemplateColumns: "200px 1fr", gap: 14, alignItems: "start" }}>
+        <div className="ss_layout">
 
           {/* SIDEBAR */}
-          <div style={{ display: "flex", flexDirection: "column", gap: 10, position: "sticky", top: 16 }}>
+          <div className="ss_sidebar">
 
             {/* Candidate list */}
             <div style={{ background: "rgba(255,255,255,0.02)", border: "1px solid rgba(255,255,255,0.05)", borderRadius: 10, padding: 10 }}>
-              <div style={{ fontSize: 8, color: "#1e293b", letterSpacing: 3, marginBottom: 8, fontFamily: "'DM Mono', monospace" }}>CANDIDATES</div>
+              <div style={{ fontSize: 8, color: "#94a3b8", letterSpacing: 3, marginBottom: 8, fontFamily: "'DM Mono', monospace" }}>CANDIDATES</div>
               <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
                 {ranked.map(({ id, name, final }) => <CandidateRow key={id} name={name} final={final} isActive={id === active} onClick={() => { setActive(id); setFetchErr(""); }} />)}
               </div>
-              <button onClick={addStock} style={{ width: "100%", marginTop: 5, background: "transparent", border: "1px dashed rgba(255,255,255,0.07)", borderRadius: 5, padding: "6px", color: "#1e293b", fontSize: 10, cursor: "pointer" }}
+              <button onClick={addStock} style={{ width: "100%", marginTop: 5, background: "transparent", border: "1px dashed rgba(255,255,255,0.07)", borderRadius: 5, padding: "6px", color: "#94a3b8", fontSize: 10, cursor: "pointer" }}
                 onMouseEnter={(e) => { e.target.style.borderColor = C.core + "55"; e.target.style.color = C.core; }}
-                onMouseLeave={(e) => { e.target.style.borderColor = "rgba(255,255,255,0.07)"; e.target.style.color = "#1e293b"; }}
+                onMouseLeave={(e) => { e.target.style.borderColor = "rgba(255,255,255,0.07)"; e.target.style.color = "#94a3b8"; }}
               >+ Add Stock</button>
             </div>
 
@@ -593,7 +612,7 @@ export default function StockScorerV5() {
                 {[{ label: "CORE", val: scores.coreScore, max: 80, color: C.core }, { label: "TIME", val: scores.timingScore, max: 20, color: C.timing }, { label: "RISK", val: scores.riskDeduct, max: 15, color: C.risk }].map((x) => (
                   <div key={x.label} style={{ textAlign: "center" }}>
                     <MiniDial score={x.val} color={x.color} size={34} />
-                    <div style={{ fontSize: 7, color: "#334155", marginTop: 2, fontFamily: "'DM Mono', monospace" }}>{x.label}<span style={{ color: "#1e293b" }}>{`/${x.max}`}</span></div>
+                    <div style={{ fontSize: 7, color: "#94a3b8", marginTop: 2, fontFamily: "'DM Mono', monospace" }}>{x.label}<span style={{ color: "#64748b" }}>{`/${x.max}`}</span></div>
                   </div>
                 ))}
               </div>
@@ -603,12 +622,12 @@ export default function StockScorerV5() {
               </div>
               {/* Auto-fill stats */}
               {autoCount > 0 && (
-                <div style={{ fontSize: 8, color: "#334155", textAlign: "center", fontFamily: "'DM Mono', monospace" }}>
+                <div style={{ fontSize: 8, color: "#94a3b8", textAlign: "center", fontFamily: "'DM Mono', monospace" }}>
                   <span style={{ color: "#00ff88" }}>{autoCount}</span> fields auto-filled
                 </div>
               )}
               <div style={{ width: "100%" }}>
-                <div style={{ display: "flex", justifyContent: "space-between", fontSize: 8, color: "#1e293b", marginBottom: 3, fontFamily: "'DM Mono', monospace" }}>
+                <div style={{ display: "flex", justifyContent: "space-between", fontSize: 8, color: "#94a3b8", marginBottom: 3, fontFamily: "'DM Mono', monospace" }}>
                   <span>COMPLETE</span>
                   <span style={{ color: completePct === 100 ? "#00ff88" : C.core }}>{`${completePct}%`}</span>
                 </div>
@@ -705,7 +724,7 @@ export default function StockScorerV5() {
 
             {/* Factor grid */}
             {!showOverlay ? (
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
+              <div className="ss_factors">
                 {currentTab.factors.map((f) => (
                   <FactorRow key={f.id} factor={f}
                     value={stock.values[f.id] != null ? stock.values[f.id] : null}
@@ -719,7 +738,7 @@ export default function StockScorerV5() {
                 ))}
               </div>
             ) : (
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
+              <div className="ss_factors">
                 {[{ ...FLOW_FACTOR, type: "flow" }, { ...IV_FACTOR, type: "iv" }].map((f) => (
                   <FactorRow key={f.id} factor={f}
                     value={stock.values[f.id] != null ? stock.values[f.id] : null}
@@ -732,7 +751,7 @@ export default function StockScorerV5() {
                   />
                 ))}
                 <div style={{ gridColumn: "1/-1", background: "rgba(255,255,255,0.015)", border: "1px solid rgba(255,255,255,0.04)", borderRadius: 8, padding: 12 }}>
-                  <div style={{ fontSize: 8, color: "#334155", letterSpacing: 2, marginBottom: 6, fontFamily: "'DM Mono', monospace" }}>OVERLAY NOTE</div>
+                  <div style={{ fontSize: 8, color: "#94a3b8", letterSpacing: 2, marginBottom: 6, fontFamily: "'DM Mono', monospace" }}>OVERLAY NOTE</div>
                   <div style={{ fontSize: 10, color: "#475569", lineHeight: 1.6 }}>Institutional Flow and IV Environment cannot be automated. Flow requires live 13F + dark pool data ($500+/mo). IV requires options data (Polygon $29/mo). Both are always manual.</div>
                 </div>
               </div>
@@ -741,34 +760,34 @@ export default function StockScorerV5() {
             <FormulaBar coreScore={scores.coreScore} timingRaw={scores.timingRaw} timingMultiplier={scores.timingMultiplier} riskDeduct={scores.riskDeduct} final={scores.final} />
 
             {/* Trade + Narrative */}
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+            <div className="ss_output">
               <div style={{ background: `linear-gradient(135deg, ${trade.color}0a, transparent)`, border: "1px solid " + trade.color + "2a", borderRadius: 10, padding: 14 }}>
-                <div style={{ fontSize: 8, color: "#1e293b", letterSpacing: 3, marginBottom: 8, fontFamily: "'DM Mono', monospace" }}>TRADE STRUCTURE</div>
+                <div style={{ fontSize: 8, color: "#94a3b8", letterSpacing: 3, marginBottom: 8, fontFamily: "'DM Mono', monospace" }}>TRADE STRUCTURE</div>
                 <div style={{ fontSize: 14, fontWeight: 800, color: trade.color, fontFamily: "'DM Mono', monospace", marginBottom: 4 }}>{trade.action}</div>
                 <div style={{ fontSize: 11, color: "#94a3b8", fontWeight: 600, marginBottom: 8 }}>{trade.reason}</div>
                 <div style={{ fontSize: 10, color: "#475569", lineHeight: 1.6, borderTop: "1px solid rgba(255,255,255,0.04)", paddingTop: 8 }}>{trade.detail}</div>
               </div>
               <div style={{ background: "rgba(255,255,255,0.02)", border: "1px solid rgba(255,255,255,0.05)", borderRadius: 10, padding: 14 }}>
-                <div style={{ fontSize: 8, color: "#1e293b", letterSpacing: 3, marginBottom: 10, fontFamily: "'DM Mono', monospace" }}>SIGNAL NARRATIVE</div>
+                <div style={{ fontSize: 8, color: "#94a3b8", letterSpacing: 3, marginBottom: 10, fontFamily: "'DM Mono', monospace" }}>SIGNAL NARRATIVE</div>
                 <div style={{ display: "flex", flexDirection: "column", gap: 9 }}>
                   <div>
-                    <div style={{ fontSize: 8, color: "#1e293b", letterSpacing: 2, marginBottom: 2, fontFamily: "'DM Mono', monospace" }}>CONFIDENCE</div>
+                    <div style={{ fontSize: 8, color: "#94a3b8", letterSpacing: 2, marginBottom: 2, fontFamily: "'DM Mono', monospace" }}>CONFIDENCE</div>
                     <div style={{ fontSize: 13, fontWeight: 800, color: conf.color }}>{conf.label}</div>
                   </div>
                   <div>
-                    <div style={{ fontSize: 8, color: "#1e293b", letterSpacing: 2, marginBottom: 2, fontFamily: "'DM Mono', monospace" }}>PRIMARY DRIVER</div>
+                    <div style={{ fontSize: 8, color: "#94a3b8", letterSpacing: 2, marginBottom: 2, fontFamily: "'DM Mono', monospace" }}>PRIMARY DRIVER</div>
                     <div style={{ fontSize: 10, color: "#94a3b8", lineHeight: 1.5 }}>{narr.primaryDriver}</div>
                   </div>
                   {narr.velocityAlert && <div style={{ background: "rgba(0,212,255,0.07)", border: "1px solid rgba(0,212,255,0.2)", borderRadius: 6, padding: "6px 8px", fontSize: 10, color: C.timing }}>{narr.velocityAlert}</div>}
                   <div>
-                    <div style={{ fontSize: 8, color: "#1e293b", letterSpacing: 2, marginBottom: 2, fontFamily: "'DM Mono', monospace" }}>KEY RISK</div>
+                    <div style={{ fontSize: 8, color: "#94a3b8", letterSpacing: 2, marginBottom: 2, fontFamily: "'DM Mono', monospace" }}>KEY RISK</div>
                     <div style={{ fontSize: 10, color: narr.allRisks.length > 0 ? "#ff9544" : "#334155", lineHeight: 1.5 }}>{narr.keyRisk}</div>
                   </div>
                   <div style={{ display: "flex", gap: 5, paddingTop: 6, borderTop: "1px solid rgba(255,255,255,0.04)" }}>
                     {[{ l: "Core", v: scores.coreScore, c: C.core, suffix: "/80" }, { l: "Time", v: scores.timingScore, c: C.timing, suffix: "/20" }, { l: "Risk-", v: scores.riskDeduct, c: C.risk, suffix: "/15" }].map((x) => (
                       <div key={x.l} style={{ flex: 1, textAlign: "center", background: "rgba(255,255,255,0.02)", borderRadius: 5, padding: "5px 3px" }}>
                         <div style={{ fontSize: 13, fontWeight: 800, color: x.c, fontFamily: "'DM Mono', monospace" }}>{x.l === "Risk-" ? `-${x.v}` : x.v}</div>
-                        <div style={{ fontSize: 7, color: "#1e293b", fontFamily: "'DM Mono', monospace" }}>{`${x.l}${x.suffix}`}</div>
+                        <div style={{ fontSize: 7, color: "#94a3b8", fontFamily: "'DM Mono', monospace" }}>{`${x.l}${x.suffix}`}</div>
                       </div>
                     ))}
                   </div>
@@ -781,7 +800,7 @@ export default function StockScorerV5() {
               {[{ r: "78+", l: "STRONG BUY", c: "#00ff88" }, { r: "65-77", l: "BUY", c: "#7dff6b" }, { r: "50-64", l: "WATCH", c: "#ffd700" }, { r: "35-49", l: "WEAK", c: "#ff9544" }, { r: "< 35", l: "NO SIGNAL", c: "#ff4466" }].map((g) => (
                 <div key={g.l} style={{ display: "flex", alignItems: "center", gap: 4 }}>
                   <div style={{ width: 5, height: 5, borderRadius: "50%", background: g.c, boxShadow: "0 0 4px " + g.c }} />
-                  <span style={{ fontSize: 8, color: "#1e293b", fontFamily: "'DM Mono', monospace" }}>{g.r} <span style={{ color: g.c }}>{g.l}</span></span>
+                  <span style={{ fontSize: 8, color: "#94a3b8", fontFamily: "'DM Mono', monospace" }}>{g.r} <span style={{ color: g.c }}>{g.l}</span></span>
                 </div>
               ))}
             </div>
