@@ -1,6 +1,6 @@
 export const runtime = "nodejs";
 
-import { scoreFromFmp } from "@/lib/scoring";
+import { scoreFromFmp } from "../../../lib/scoring";
 
 const FMP_BASE = "https://financialmodelingprep.com/stable";
 
