@@ -34,11 +34,15 @@ export async function GET(request) {
   }
 
   try {
-    const [quote, profile, earningsSurprises] = await Promise.all([
-      fetchJSON(`${FMP_BASE}/quote?symbol=${symbol}&apikey=${apiKey}`),
-      fetchJSON(`${FMP_BASE}/profile?symbol=${symbol}&apikey=${apiKey}`),
-      fetchJSON(`${FMP_BASE}/earnings-surprises?symbol=${symbol}&apikey=${apiKey}`),
-    ]);
+    const quote = await fetchJSON(`${FMP_BASE}/quote/${symbol}?apikey=${apiKey}`);
+const profile = await fetchJSON(`${FMP_BASE}/profile/${symbol}?apikey=${apiKey}`);
+
+let earningsSurprises = [];
+try {
+  earningsSurprises = await fetchJSON(`${FMP_BASE}/earnings-surprises/${symbol}?apikey=${apiKey}`);
+} catch (e) {
+  earningsSurprises = [];
+}
 
     const fmpData = { quote, profile, earningsSurprises };
     const scored = scoreFromFmp(fmpData);
