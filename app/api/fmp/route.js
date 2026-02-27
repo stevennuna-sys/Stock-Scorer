@@ -2,7 +2,7 @@ export const runtime = "nodejs";
 
 import { scoreFromFmp } from "../../../lib/scoring";
 
-const FMP_BASE = "https://financialmodelingprep.com/stable";
+const FMP_BASE = "https://financialmodelingprep.com/api/v3";
 
 async function fetchJSON(url) {
   const controller = new AbortController();
