@@ -1,98 +1,97 @@
-import { NextResponse } from "next/server";
+// app/api/fmp/route.js
+// Server-side proxy for Financial Modeling Prep (FMP) API.
+// Runs server-side — API key never exposed to the browser.
+// Env var required: FMP_API_KEY
 
-const BASE = "https://financialmodelingprep.com/stable";
+export const runtime = “nodejs”; // needs process.env
 
-function sleep(ms) {
-  return new Promise((r) => setTimeout(r, ms));
-}
+const FMP_BASE = “https://financialmodelingprep.com/stable”;
 
-async function fetchJson(url) {
-  // Light retry for rate limits
-  for (let attempt = 0; attempt < 3; attempt++) {
-    const res = await fetch(url, {
-      cache: "no-store",
-      headers: {
-        Accept: "application/json",
-      },
-    });
+// ─── RETRY HELPER ─────────────────────────────────────────────────────────────
 
-    if (res.status === 429 && attempt < 2) {
-      await sleep(350 * (attempt + 1));
-      continue;
-    }
+async function fetchWithRetry(url, retries = 3, baseDelayMs = 400) {
+for (let attempt = 0; attempt <= retries; attempt++) {
+const res = await fetch(url, {
+signal: AbortSignal.timeout(10000),
+headers: { Accept: “application/json” },
+});
 
-    const text = await res.text();
-    let data = null;
-    try {
-      data = text ? JSON.parse(text) : null;
-    } catch {
-      data = { raw: text };
-    }
-
-    return { ok: res.ok, status: res.status, data };
+```
+if (res.status === 429) {
+  if (attempt === retries) {
+    return { ok: false, status: 429, body: null, error: "FMP rate limit — too many requests (429)" };
   }
-
-  return { ok: false, status: 429, data: { error: "Rate limited" } };
+  // Exponential back-off: 400ms, 800ms, 1600ms
+  await new Promise((r) => setTimeout(r, baseDelayMs * 2 ** attempt));
+  continue;
 }
+
+if (!res.ok) {
+  let text = "";
+  try { text = await res.text(); } catch {}
+  return { ok: false, status: res.status, body: null, error: `FMP returned ${res.status}: ${text.slice(0, 120)}` };
+}
+
+const body = await res.json();
+return { ok: true, status: res.status, body, error: null };
+```
+
+}
+}
+
+// ─── ROUTE HANDLER ────────────────────────────────────────────────────────────
 
 export async function GET(request) {
-  try {
-    const { searchParams } = new URL(request.url);
-    const ticker = (searchParams.get("ticker") || "").trim().toUpperCase();
+// 1. Validate env var
+const apiKey = process.env.FMP_API_KEY;
+if (!apiKey) {
+return Response.json(
+{ error: “FMP_API_KEY environment variable is not set. Add it in Vercel → Settings → Environment Variables.” },
+{ status: 500 }
+);
+}
 
-    if (!ticker) {
-      return NextResponse.json({ error: "Missing symbol" }, { status: 400 });
-    }
+// 2. Validate symbol
+const { searchParams } = new URL(request.url);
+const symbol = (searchParams.get(“symbol”) || “”).toUpperCase().trim();
 
-    const apiKey = process.env.FMP_API_KEY;
-    if (!apiKey) {
-      return NextResponse.json(
-        { error: "Missing FMP_API_KEY env var on server" },
-        { status: 500 }
-      );
-    }
+if (!symbol || !/^[A-Z0-9.-]{1,12}$/.test(symbol)) {
+return Response.json({ error: “Missing or invalid symbol. Pass ?symbol=AAPL” }, { status: 400 });
+}
 
-    const quoteUrl = `${BASE}/quote?symbol=${encodeURIComponent(ticker)}&apikey=${encodeURIComponent(apiKey)}`;
-    const profileUrl = `${BASE}/profile?symbol=${encodeURIComponent(ticker)}&apikey=${encodeURIComponent(apiKey)}`;
+// 3. Fire three FMP requests in parallel
+const [quoteRes, profileRes, earningsRes] = await Promise.all([
+fetchWithRetry(`${FMP_BASE}/quote?symbol=${symbol}&apikey=${apiKey}`),
+fetchWithRetry(`${FMP_BASE}/profile?symbol=${symbol}&apikey=${apiKey}`),
+fetchWithRetry(`${FMP_BASE}/earnings-surprises?symbol=${symbol}&apikey=${apiKey}`),
+]);
 
-    const [quoteRes, profileRes] = await Promise.all([
-      fetchJson(quoteUrl),
-      fetchJson(profileUrl),
-    ]);
+// 4. Check for errors — return the first one we find
+for (const r of [quoteRes, profileRes, earningsRes]) {
+if (!r.ok) {
+return Response.json({ error: r.error }, { status: r.status === 429 ? 429 : 502 });
+}
+}
 
-    if (!quoteRes.ok) {
-      return NextResponse.json(
-        { error: "FMP quote failed", status: quoteRes.status, details: quoteRes.data },
-        { status: 502 }
-      );
-    }
+// 5. Validate that we got actual data back for the symbol
+const quote            = quoteRes.body   || [];
+const profile          = profileRes.body  || [];
+const earningsSurprises = earningsRes.body || [];
 
-    // FMP returns arrays for many endpoints
-    const quote = Array.isArray(quoteRes.data) ? quoteRes.data[0] : quoteRes.data;
-    const profile = profileRes.ok
-      ? (Array.isArray(profileRes.data) ? profileRes.data[0] : profileRes.data)
-      : null;
+if (!quote.length && !profile.length) {
+return Response.json(
+{ error: `Symbol "${symbol}" not found on FMP. Check the ticker and try again.` },
+{ status: 404 }
+);
+}
 
-    if (!quote) {
-      return NextResponse.json(
-        { error: "No quote data returned from FMP" },
-        { status: 502 }
-      );
-    }
-
-    return NextResponse.json(
-      {
-        source: "fmp",
-        ticker,
-        quote,
-        profile,
-      },
-      { status: 200 }
-    );
-  } catch (e) {
-    return NextResponse.json(
-      { error: "Server error", details: String(e?.message || e) },
-      { status: 500 }
-    );
-  }
+return Response.json(
+{ symbol, quote, profile, earningsSurprises, source: “FMP” },
+{
+headers: {
+// Cache 15 minutes in Vercel Edge cache
+“Cache-Control”: “public, s-maxage=900, stale-while-revalidate=1800”,
+},
+}
+);
 }
