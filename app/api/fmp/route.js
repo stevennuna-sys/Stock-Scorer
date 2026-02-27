@@ -1,8 +1,6 @@
 export const runtime = "nodejs";
 
 import { scoreFromFmp } from "@/lib/scoring";
-import { getCache, setCache } from "@/lib/cache";
-import { checkRateLimit } from "@/lib/rateLimit";
 
 const FMP_BASE = "https://financialmodelingprep.com/stable";
 
@@ -17,23 +15,15 @@ async function fetchJSON(url) {
     if (!res.ok) throw new Error("FMP " + res.status);
     return await res.json();
   } catch {
-    throw new Error("Upstream FMP failure");
+    throw new Error("FMP request failed");
   }
 }
 
 export async function GET(request) {
   const apiKey = process.env.FMP_API_KEY;
+
   if (!apiKey) {
     return Response.json({ error: "Server misconfigured" }, { status: 500 });
-  }
-
-  const ip =
-    request.headers.get("x-forwarded-for") ||
-    request.headers.get("x-real-ip") ||
-    "unknown";
-
-  if (!checkRateLimit(ip)) {
-    return Response.json({ error: "Rate limit exceeded" }, { status: 429 });
   }
 
   const { searchParams } = new URL(request.url);
@@ -43,10 +33,6 @@ export async function GET(request) {
     return Response.json({ error: "Invalid symbol" }, { status: 400 });
   }
 
-  const cacheKey = `fmp:${symbol}`;
-  const cached = getCache(cacheKey);
-  if (cached) return Response.json(cached);
-
   try {
     const [quote, profile, earningsSurprises] = await Promise.all([
       fetchJSON(`${FMP_BASE}/quote?symbol=${symbol}&apikey=${apiKey}`),
@@ -55,29 +41,17 @@ export async function GET(request) {
     ]);
 
     const fmpData = { quote, profile, earningsSurprises };
-
     const scored = scoreFromFmp(fmpData);
 
-    const response = {
+    return Response.json({
       symbol,
       modelVersion: scored.modelVersion,
       companyName: scored.companyName,
       composite: scored.composite,
       factors: scored.factors,
       timestamp: scored.timestamp,
-    };
-
-    setCache(cacheKey, response);
-
-    console.log("[FMP SCORE]", symbol, response.composite);
-
-    return Response.json(response, {
-      headers: {
-        "Cache-Control": "public, s-maxage=900, stale-while-revalidate=1800",
-      },
     });
   } catch (err) {
-    console.error("[FMP ERROR]", symbol, err.message);
     return Response.json({ error: err.message }, { status: 502 });
   }
 }
