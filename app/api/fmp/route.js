@@ -2,25 +2,21 @@ export const runtime = "nodejs";
 
 import { scoreFromFmp } from "../../../lib/scoring";
 
-const FMP_BASE = "https://financialmodelingprep.com/api/v3";
+const FINNHUB_BASE = "https://finnhub.io/api/v1";
 
 async function fetchJSON(url) {
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), 10000);
+  const res = await fetch(url);
 
-  try {
-    const res = await fetch(url, { signal: controller.signal });
-    clearTimeout(timeout);
-
-    if (!res.ok) throw new Error("FMP " + res.status);
-    return await res.json();
-  } catch {
-    throw new Error("FMP request failed");
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error("Finnhub error: " + text);
   }
+
+  return await res.json();
 }
 
 export async function GET(request) {
-  const apiKey = process.env.FMP_API_KEY;
+  const apiKey = process.env.FINNHUB_API_KEY;
 
   if (!apiKey) {
     return Response.json({ error: "Server misconfigured" }, { status: 500 });
@@ -29,23 +25,52 @@ export async function GET(request) {
   const { searchParams } = new URL(request.url);
   const symbol = (searchParams.get("symbol") || "").toUpperCase().trim();
 
-  if (!symbol || !/^[A-Z0-9.\-]{1,12}$/.test(symbol)) {
+  if (!symbol) {
     return Response.json({ error: "Invalid symbol" }, { status: 400 });
   }
 
   try {
-    const quote = await fetchJSON(`${FMP_BASE}/quote/${symbol}?apikey=${apiKey}`);
-const profile = await fetchJSON(`${FMP_BASE}/profile/${symbol}?apikey=${apiKey}`);
+    // ✅ Quote
+    const quote = await fetchJSON(
+      `${FINNHUB_BASE}/quote?symbol=${symbol}&token=${apiKey}`
+    );
 
-let earningsSurprises = [];
-try {
-  earningsSurprises = await fetchJSON(`${FMP_BASE}/earnings-surprises/${symbol}?apikey=${apiKey}`);
-} catch (e) {
-  earningsSurprises = [];
-}
+    // ✅ Company Profile
+    const profile = await fetchJSON(
+      `${FINNHUB_BASE}/stock/profile2?symbol=${symbol}&token=${apiKey}`
+    );
 
-    const fmpData = { quote, profile, earningsSurprises };
-    const scored = scoreFromFmp(fmpData);
+    // ✅ Earnings Surprise
+    const earnings = await fetchJSON(
+      `${FINNHUB_BASE}/stock/earnings?symbol=${symbol}&token=${apiKey}`
+    );
+
+    // Normalize to match your existing scoring engine format
+    const fmpCompatible = {
+      quote: [
+        {
+          pe: quote.pe ?? null,
+          priceEarningsRatio: quote.pe ?? null,
+        },
+      ],
+      profile: [
+        {
+          sector: profile.finnhubIndustry || "Unknown",
+          companyName: profile.name || null,
+        },
+      ],
+      earningsSurprises:
+        Array.isArray(earnings) && earnings.length > 0
+          ? [
+              {
+                date: earnings[0].period,
+                surprisePercentage: earnings[0].surprisePercent ?? null,
+              },
+            ]
+          : [],
+    };
+
+    const scored = scoreFromFmp(fmpCompatible);
 
     return Response.json({
       symbol,
