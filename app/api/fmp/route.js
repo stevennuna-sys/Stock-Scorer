@@ -1,73 +1,85 @@
 // app/api/fmp/route.js
-// Server-side proxy for Financial Modeling Prep (FMP) API.
-// Runs server-side -- API key never exposed to the browser.
-// Env var required: FMP_API_KEY
-
 export const runtime = "nodejs";
 
 const FMP_BASE = "https://financialmodelingprep.com/stable";
 
-async function fetchWithRetry(url, retries = 3, baseDelayMs = 400) {
+async function fetchWithRetry(url, retries = 2) {
   for (let attempt = 0; attempt <= retries; attempt++) {
-    const res = await fetch(url, {
-      signal: AbortSignal.timeout(10000),
-      headers: { Accept: "application/json" },
-    });
-    if (res.status === 429) {
-      if (attempt === retries) {
-        return { ok: false, status: 429, body: null, error: "FMP rate limit (429)" };
+    try {
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 10000);
+
+      const res = await fetch(url, {
+        signal: controller.signal,
+        headers: { Accept: "application/json" },
+      });
+
+      clearTimeout(timeout);
+
+      if (res.status === 429) {
+        if (attempt === retries) {
+          return { ok: false, status: 429, error: "FMP rate limit exceeded." };
+        }
+        await new Promise(r => setTimeout(r, 500 * (attempt + 1)));
+        continue;
       }
-      await new Promise((r) => setTimeout(r, baseDelayMs * 2 ** attempt));
-      continue;
+
+      if (!res.ok) {
+        return { ok: false, status: res.status, error: `FMP ${res.status}` };
+      }
+
+      const json = await res.json();
+      return { ok: true, body: json };
+    } catch (err) {
+      if (attempt === retries) {
+        return { ok: false, status: 502, error: "FMP request failed." };
+      }
     }
-    if (!res.ok) {
-      let text = "";
-      try { text = await res.text(); } catch {}
-      return { ok: false, status: res.status, body: null, error: "FMP returned " + res.status + ": " + text.slice(0, 120) };
-    }
-    const body = await res.json();
-    return { ok: true, status: res.status, body, error: null };
   }
 }
 
 export async function GET(request) {
   const apiKey = process.env.FMP_API_KEY;
   if (!apiKey) {
-    return Response.json(
-      { error: "FMP_API_KEY env var not set. Add it in Vercel > Settings > Environment Variables." },
-      { status: 500 }
-    );
+    return Response.json({ error: "FMP_API_KEY not configured." }, { status: 500 });
   }
 
   const { searchParams } = new URL(request.url);
   const symbol = (searchParams.get("symbol") || "").toUpperCase().trim();
+
   if (!symbol || !/^[A-Z0-9.\-]{1,12}$/.test(symbol)) {
-    return Response.json({ error: "Missing or invalid symbol. Pass ?symbol=AAPL" }, { status: 400 });
+    return Response.json({ error: "Invalid symbol." }, { status: 400 });
   }
 
-  const [quoteRes, profileRes, earningsRes] = await Promise.all([
-    fetchWithRetry(FMP_BASE + "/quote?symbol=" + symbol + "&apikey=" + apiKey),
-    fetchWithRetry(FMP_BASE + "/profile?symbol=" + symbol + "&apikey=" + apiKey),
-    fetchWithRetry(FMP_BASE + "/earnings-surprises?symbol=" + symbol + "&apikey=" + apiKey),
-  ]);
+  const endpoints = [
+    `${FMP_BASE}/quote?symbol=${symbol}&apikey=${apiKey}`,
+    `${FMP_BASE}/profile?symbol=${symbol}&apikey=${apiKey}`,
+    `${FMP_BASE}/earnings-surprises?symbol=${symbol}&apikey=${apiKey}`,
+  ];
+
+  const [quoteRes, profileRes, earningsRes] = await Promise.all(
+    endpoints.map(fetchWithRetry)
+  );
 
   for (const r of [quoteRes, profileRes, earningsRes]) {
-    if (!r.ok) return Response.json({ error: r.error }, { status: r.status === 429 ? 429 : 502 });
-  }
-
-  const quote             = quoteRes.body   || [];
-  const profile           = profileRes.body  || [];
-  const earningsSurprises = earningsRes.body || [];
-
-  if (!quote.length && !profile.length) {
-    return Response.json(
-      { error: "Symbol " + symbol + " not found on FMP." },
-      { status: 404 }
-    );
+    if (!r.ok) {
+      return Response.json({ error: r.error }, { status: r.status || 502 });
+    }
   }
 
   return Response.json(
-    { symbol, quote, profile, earningsSurprises, source: "FMP" },
-    { headers: { "Cache-Control": "public, s-maxage=900, stale-while-revalidate=1800" } }
+    {
+      symbol,
+      quote: quoteRes.body || [],
+      profile: profileRes.body || [],
+      earningsSurprises: earningsRes.body || [],
+      source: "FMP",
+    },
+    {
+      headers: {
+        "Cache-Control":
+          "public, s-maxage=900, stale-while-revalidate=1800",
+      },
+    }
   );
 }
