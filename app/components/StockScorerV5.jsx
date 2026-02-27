@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useCallback, useEffect, useRef } from "react";
-import { interpretFmpData, ALWAYS_MANUAL, confidenceColor } from "../../lib/scoring";
+import { ALWAYS_MANUAL, confidenceColor } from "../../lib/scoring";
 
 const CORE_FACTORS = [
   { id: "eps_surprise",      label: "EPS Surprise Magnitude",  description: "Beat vs consensus estimate last quarter",                       weight: 20, anchors: ["Miss / in-line < 1%", "Small beat 1-5%", "Solid beat 5-10%", "Strong beat 10-20%", "Blowout > 20%"],                                                         scores: [0, 4, 10, 16, 20] },
@@ -406,8 +406,8 @@ export default function StockScorerV5() {
         }
         return res.json();
       })
-      .then(function(fmpData) {
-        var interpreted = interpretFmpData(fmpData);
+    .then(function(apiResult) {
+  var interpreted = apiResult.factors;
         setStocks(function(p) {
           var s = p[active];
           var newValues     = Object.assign({}, s.values);
