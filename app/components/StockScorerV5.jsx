@@ -397,13 +397,58 @@ export default function StockScorerV5() {
     setFetching(true);
     setFetchErr("");
 
-    fetch("/api/fmp?symbol=" + encodeURIComponent(symbol))
-      .then(function(res) {
-        if (!res.ok) {
-          return res.json().catch(function() { return {}; }).then(function(err) {
-            throw new Error((err && err.error) || "HTTP " + res.status);
-          });
-        }
+fetch("/api/fmp?symbol=" + encodeURIComponent(symbol))
+  .then(function(res) {
+    if (!res.ok) {
+      return res.json().then(function(err) {
+        throw new Error(err.error || "Fetch failed");
+      });
+    }
+    return res.json();
+  })
+  .then(function(apiResult) {
+    setStocks(function(p) {
+      var s = p[active];
+      var newValues     = Object.assign({}, s.values);
+      var newAutoFields = new Set(s.autoFields);
+      var newAutoRaw    = {};
+      var newAutoConf   = {};
+
+      Object.entries(apiResult.factors).forEach(function(entry) {
+        var fieldId = entry[0];
+        var result  = entry[1];
+
+        if (result.index === null) return;
+        if (s.manualFields.has(fieldId)) return;
+
+        newValues[fieldId]   = result.index;
+        newAutoFields.add(fieldId);
+        newAutoRaw[fieldId]  = result.raw;
+        newAutoConf[fieldId] = result.confidence;
+      });
+
+      var updatedName = s.name;
+      if (apiResult.companyName) {
+        updatedName = apiResult.companyName + " (" + symbol + ")";
+      }
+
+      return Object.assign({}, p, {
+        [active]: Object.assign({}, s, {
+          name: updatedName,
+          values: newValues,
+          autoFields: newAutoFields,
+          autoRaw: newAutoRaw,
+          autoConf: newAutoConf,
+        }),
+      });
+    });
+  })
+  .catch(function(err) {
+    setFetchErr(err.message);
+  })
+  .finally(function() {
+    setFetching(false);
+  });
         return res.json();
       })
     .then(function(apiResult) {
