@@ -449,45 +449,6 @@ fetch("/api/fmp?symbol=" + encodeURIComponent(symbol))
   .finally(function() {
     setFetching(false);
   });
-        return res.json();
-      })
-    .then(function(apiResult) {
-  var interpreted = apiResult.factors;
-        setStocks(function(p) {
-          var s = p[active];
-          var newValues     = Object.assign({}, s.values);
-          var newAutoFields = new Set(s.autoFields);
-          var newAutoRaw    = Object.assign({}, s.autoRaw);
-          var newAutoConf   = Object.assign({}, s.autoConf);
-
-          var updatedName = s.name;
-          var nameResult = interpreted.company_name;
-          if (nameResult && nameResult.raw && nameResult.raw.companyName && s.name === "New Stock (TICK)") {
-            updatedName = nameResult.raw.companyName + " (" + symbol + ")";
-          }
-
-          Object.entries(interpreted).forEach(function(entry) {
-            var fieldId = entry[0], result = entry[1];
-            if (fieldId === "company_name") return;
-            if (result.index === null) return;
-            if (s.manualFields.has(fieldId)) return;
-            newValues[fieldId]   = result.index;
-            newAutoFields.add(fieldId);
-            newAutoRaw[fieldId]  = result.raw;
-            newAutoConf[fieldId] = result.confidence;
-          });
-
-          return Object.assign({}, p, {
-            [active]: Object.assign({}, s, { name: updatedName, values: newValues, autoFields: newAutoFields, autoRaw: newAutoRaw, autoConf: newAutoConf }),
-          });
-        });
-      })
-      .catch(function(err) {
-        setFetchErr(String((err && err.message) || err));
-      })
-      .finally(function() {
-        setFetching(false);
-      });
   }, [active, stocks]);
 
   function addStock() {
